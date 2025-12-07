@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jugaad-AI Shop Assistant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/12.4.0/math.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600&family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <script type="importmap">
+    {
+      "imports": {
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.31.0"
+      }
+    }
+    </script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { 
+              sans: ['Inter', 'sans-serif'],
+              display: ['Fredoka', 'sans-serif']
+            },
+            colors: { 
+              primary: '#6366F1', // Indigo
+              secondary: '#EC4899', // Pink
+              accent: '#10B981', // Emerald
+            },
+            animation: {
+              'pulse-fast': 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+              'float': 'float 3s ease-in-out infinite',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              }
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+        /* Robot Animations */
+        @keyframes talk {
+            0%, 100% { height: 4px; border-radius: 2px; }
+            50% { height: 12px; border-radius: 6px; }
+        }
+        .mouth-talking {
+            animation: talk 0.2s ease-in-out infinite;
+        }
+        .robot-container.speaking .robot-head {
+            animation: float 2s ease-in-out infinite;
+        }
+        
+        /* Chat Scrollbar */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Mic Wave Animation */
+        .mic-active {
+            box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 20px rgba(99, 102, 241, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-indigo-50 h-screen flex flex-col overflow-hidden text-slate-800">
+
+    <!-- Top Bar -->
+    <header class="p-4 flex justify-between items-center z-10 shrink-0 bg-white/50 backdrop-blur-sm border-b border-white/20">
+        <div class="flex items-center gap-3">
+            <div class="bg-gradient-to-tr from-primary to-secondary text-white p-2.5 rounded-xl shadow-lg shadow-primary/20">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2 2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"/><path d="M4 11v2a8 8 0 0 0 16 0v-2"/><path d="M12 19v3"/><path d="M8 22h8"/></svg>
+            </div>
+            <div>
+                <h1 class="font-display font-bold text-lg text-slate-800 leading-none">Jugaad-AI</h1>
+                <p class="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Shop Assistant</p>
+            </div>
+        </div>
+
+        <select id="languageSelect" class="bg-white border border-slate-200 text-slate-700 text-sm rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-primary/50 font-medium shadow-sm cursor-pointer hover:bg-slate-50 transition-colors">
+            <option value="en-IN">English (India)</option>
+            <option value="kn-IN">Kannada (ಕನ್ನಡ)</option>
+            <option value="hi-IN">Hindi (हिंदी)</option>
+        </select>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 flex flex-col items-center justify-between relative w-full max-w-lg mx-auto">
+        
+        <!-- Robot Avatar Area -->
+        <div id="robotContainer" class="flex-1 flex flex-col items-center justify-center w-full transition-all duration-500 p-6 robot-container">
+            
+            <!-- Robot SVG -->
+            <div class="relative w-56 h-56 flex items-center justify-center">
+                <!-- Background Glow -->
+                <div class="absolute w-48 h-48 bg-primary/20 rounded-full blur-3xl animate-pulse"></div>
+                
+                <svg viewBox="0 0 200 200" class="w-full h-full drop-shadow-xl robot-head transition-transform duration-300">
+                    <!-- Head -->
+                    <rect x="50" y="50" width="100" height="90" rx="24" fill="#FFFFFF" stroke="#334155" stroke-width="3" />
+                    
+                    <!-- Ears/Headphones -->
+                    <path d="M45 80 L35 80 Q30 80 30 95 Q30 110 35 110 L45 110" fill="#6366F1" />
+                    <path d="M155 80 L165 80 Q170 80 170 95 Q170 110 165 110 L155 110" fill="#6366F1" />
+
+                    <!-- Screen Face -->
+                    <rect x="60" y="65" width="80" height="60" rx="16" fill="#1E293B" />
+                    
+                    <!-- Eyes -->
+                    <g id="eyes">
+                        <circle cx="85" cy="85" r="8" fill="#38BDF8" class="eye-glow">
+                            <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite" />
+                        </circle>
+                        <circle cx="115" cy="85" r="8" fill="#38BDF8" class="eye-glow">
+                            <animate attributeName="opacity" values="0.8;1;0.8" dur="2s" repeatCount="indefinite" />
+                        </circle>
+                    </g>
+
+                    <!-- Mouth -->
+                    <g transform="translate(100, 105)">
+                        <rect id="mouth" x="-15" y="-2" width="30" height="4" rx="2" fill="#38BDF8" />
+                    </g>
+                </svg>
+            </div>
+
+            <!-- Interaction Status -->
+            <div id="statusBadge" class="mt-6 px-5 py-2 bg-white rounded-full text-xs font-bold tracking-wide shadow-sm border border-slate-100 flex items-center gap-2.5 transition-all opacity-0 transform translate-y-2">
+                <span id="statusDot" class="w-2.5 h-2.5 rounded-full bg-slate-300"></span>
+                <span id="statusText" class="text-slate-600">Ready</span>
+            </div>
+        </div>
+
+        <!-- Chat History -->
+        <div id="chatHistory" class="w-full px-4 h-56 overflow-y-auto scrollbar-hide space-y-3 mb-2 mask-linear">
+            <div class="flex justify-start">
+                <div class="bg-white border border-slate-200 p-3.5 rounded-2xl rounded-tl-none text-sm text-slate-600 shadow-sm max-w-[85%]">
+                    👋 Namaste! I am your shop assistant. I can help you with Sweets, Electronics, and Groceries.
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Bottom Controls -->
+    <footer class="bg-white p-4 pb-6 rounded-t-[2rem] shadow-[0_-8px_30px_rgba(0,0,0,0.04)] z-20 shrink-0 max-w-lg mx-auto w-full border-t border-slate-100">
+        
+        <!-- Input Area -->
+        <div class="flex items-center gap-3 mb-5">
+            <div class="relative flex-1 group">
+                <input type="text" id="textInput" placeholder="Ask about stock or do math..." 
+                    class="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3.5 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none text-slate-700 placeholder-slate-400 transition-all">
+                <div class="absolute inset-y-0 right-3 flex items-center pointer-events-none text-xs text-slate-300 italic" id="interimText"></div>
+            </div>
+            <button id="sendBtn" class="p-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl transition-all shadow-md active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </div>
+
+        <!-- Mic Button -->
+        <div class="flex flex-col items-center gap-3">
+            <button id="micBtn" class="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 bg-primary text-white shadow-xl shadow-primary/30 hover:shadow-primary/50 active:scale-95 z-10">
+                <svg id="micIcon" xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="23"></line><line x1="8" y1="23" x2="16" y2="23"></line></svg>
+            </button>
+            <p class="text-[11px] font-medium text-slate-400">Tap to speak</p>
+        </div>
+    </footer>
+
+    <script type="module">
+        import { GoogleGenAI } from "@google/genai";
+
+        // --- Configuration ---
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const MODEL_NAME = 'gemini-2.5-flash';
+        
+        // --- State ---
+        let isListening = false;
+        let isSpeaking = false;
+        let currentLang = 'en-IN'; // Default to India English
+        let recognition = null;
+        let silenceTimer = null;
+        let accumulatedTranscript = '';
+
+        // --- DOM Elements ---
+        const micBtn = document.getElementById('micBtn');
+        const micIcon = document.getElementById('micIcon');
+        const textInput = document.getElementById('textInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const chatHistory = document.getElementById('chatHistory');
+        const languageSelect = document.getElementById('languageSelect');
+        const robotContainer = document.getElementById('robotContainer');
+        const mouth = document.getElementById('mouth');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        const statusDot = document.getElementById('statusDot');
+        const interimDisplay = document.getElementById('interimText');
+
+        // --- Audio & Speech Setup ---
+
+        // 1. Prime Audio Hardware (Improve Sensitivity)
+        async function primeAudioHardware() {
+            try {
+                // Request mic permission and configure hardware constraints
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: true
+                    }
+                });
+                console.log("Audio hardware primed.");
+                stream.getTracks().forEach(track => track.stop());
+            } catch (err) {
+                console.warn("Could not prime audio hardware:", err);
+            }
+        }
+
+        // 2. Initialize Speech Recognition
+        function initSpeechRecognition() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert("Speech recognition is not supported. Please use Google Chrome.");
+                return;
+            }
+            
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            // Key requirements for smoother experience
+            recognition.continuous = true; 
+            recognition.interimResults = true;
+            recognition.maxAlternatives = 5; // Allow multiple alternatives for better accuracy
+            recognition.lang = currentLang;
+
+            recognition.onstart = () => {
+                isListening = true;
+                updateMicUI(true);
+                updateStatus("Listening...", "bg-red-500", "text-red-500");
+                accumulatedTranscript = '';
+            };
+
+            recognition.onend = () => {
+                if (isListening) {
+                     // If unexpected stop, toggle UI off
+                     isListening = false;
+                     updateMicUI(false);
+                     updateStatus("Ready", "bg-slate-300", "text-slate-600");
+                }
+            };
+
+            recognition.onresult = (event) => {
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+
+                if (finalTranscript) {
+                    accumulatedTranscript += finalTranscript + ' ';
+                    textInput.value = accumulatedTranscript;
+                    
+                    // Reset silence timer on new final input
+                    clearTimeout(silenceTimer);
+                    
+                    // 2-second silence trigger to Send
+                    silenceTimer = setTimeout(() => {
+                        if (isListening) {
+                            recognition.stop();
+                            isListening = false;
+                            updateMicUI(false);
+                            handleUserMessage(textInput.value);
+                        }
+                    }, 2000);
+                }
+                
+                // Show interim results visually if needed, or update input partially
+                if (interimTranscript) {
+                    textInput.value = accumulatedTranscript + interimTranscript;
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.error("Speech Error:", event.error);
+                if (event.error === 'no-speech') return; // Ignore no-speech errors
+                isListening = false;
+                updateMicUI(false);
+                updateStatus("Error", "bg-red-500", "text-red-500");
+            };
+        }
+
+        // --- Logic: Math Detection ---
+        function isMathExpression(text) {
+            const t = text.trim();
+            
+            // Regex for numbers and math operators only (no text)
+            // Checks for digits, space, +, -, *, /, (, ), ., ^, %
+            // This is the "safe" arithmetic check requested.
+            const arithmeticRegex = /^[0-9\s\.\+\-\*\/\(\)\^%]+$/;
+            
+            // It must look like arithmetic AND have an operator (so "2024" isn't treated as math)
+            const hasOperator = /[\+\-\*\/\^%]/.test(t);
+
+            return arithmeticRegex.test(t) && hasOperator;
+        }
+
+        // --- Core Logic ---
+
+        async function handleUserMessage(text) {
+            const cleanText = text.trim();
+            if (!cleanText) return;
+
+            // 1. Show User Message
+            addMessage(cleanText, 'user');
+            textInput.value = '';
+            accumulatedTranscript = '';
+            
+            // 2. Check for Math (Local Evaluation)
+            if (isMathExpression(cleanText)) {
+                try {
+                    // Safe evaluation using math.js
+                    const result = math.evaluate(cleanText);
+                    const responseText = `The answer is ${result}`;
+                    addMessage(responseText, 'ai');
+                    speak(responseText);
+                    return; // Skip AI call
+                } catch (e) {
+                    console.log("Math evaluation failed, falling back to AI:", e);
+                    // Fallthrough to AI if math.js fails (e.g. malformed expression)
+                }
+            }
+
+            // 3. Prepare for AI
+            updateStatus("Thinking...", "bg-primary", "text-primary");
+            mouth.classList.add('mouth-talking'); 
+
+            try {
+                // 4. Call Gemini
+                // Shop Assistant Persona
+                const systemPrompt = `
+                    You are a friendly, helpful shop assistant at 'Jugaad General Store'.
+                    Inventory:
+                    - Sweets: Laddoo (50kg), Jalebi (10kg), Mysore Pak (5kg).
+                    - Electronics: Smartphones (5 units), Chargers (20 units).
+                    - Groceries: Rice (100kg), Dal (50kg).
+                    
+                    Instructions:
+                    1. Respond in the user's selected language: ${getLanguageName(currentLang)}.
+                    2. Keep answers short, natural, and conversational (max 2-3 sentences).
+                    3. If you don't have an item, suggest an alternative.
+                    4. Always be polite.
+                `;
+
+                const response = await ai.models.generateContent({
+                    model: MODEL_NAME,
+                    contents: cleanText,
+                    config: {
+                        systemInstruction: systemPrompt,
+                        temperature: 0.7,
+                    }
+                });
+
+                const replyText = response.text || "Sorry, I am unable to check stock right now.";
+
+                // 5. Show AI Reply
+                addMessage(replyText, 'ai');
+                
+                // 6. Speak AI Reply
+                speak(replyText);
+
+            } catch (error) {
+                console.error(error);
+                const errText = "I'm having trouble checking the inventory.";
+                addMessage(errText, 'ai');
+                speak(errText);
+            } finally {
+                if (!isSpeaking) {
+                    mouth.classList.remove('mouth-talking');
+                    updateStatus("Ready", "bg-slate-300", "text-slate-600");
+                }
+            }
+        }
+
+        function speak(text) {
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = currentLang; // Dynamic language based on selection
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0; 
+
+            // Robust Voice Selection
+            const voices = window.speechSynthesis.getVoices();
+            
+            // 1. Try to find a voice that exactly matches the selected code (e.g., 'kn-IN')
+            let voice = voices.find(v => v.lang === currentLang);
+            
+            // 2. If not found, try to find a voice that matches the language family (e.g., 'kn' for 'kn-IN')
+            if (!voice) {
+                const langFamily = currentLang.split('-')[0];
+                voice = voices.find(v => v.lang.startsWith(langFamily));
+            }
+
+            // 3. Prefer Google voices if multiple available (usually better quality)
+            if (!voice) {
+                 voice = voices.find(v => v.name.includes('Google') && v.lang.startsWith(currentLang.split('-')[0]));
+            }
+
+            if (voice) {
+                utterance.voice = voice;
+                console.log("Using voice:", voice.name);
+            } else {
+                console.log("No specific voice found for", currentLang);
+            }
+
+            utterance.onstart = () => {
+                isSpeaking = true;
+                robotContainer.classList.add('speaking');
+                mouth.classList.add('mouth-talking');
+                updateStatus("Speaking...", "bg-secondary", "text-secondary");
+            };
+
+            utterance.onend = () => {
+                isSpeaking = false;
+                robotContainer.classList.remove('speaking');
+                mouth.classList.remove('mouth-talking');
+                updateStatus("Ready", "bg-slate-300", "text-slate-600");
+            };
+
+            utterance.onerror = () => {
+                isSpeaking = false;
+                robotContainer.classList.remove('speaking');
+                mouth.classList.remove('mouth-talking');
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // --- UI Helpers ---
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            const isUser = sender === 'user';
+            
+            div.className = `flex ${isUser ? 'justify-end' : 'justify-start'} animate-[fadeIn_0.3s_ease-out]`;
+            
+            div.innerHTML = `
+                <div class="${isUser 
+                    ? 'bg-slate-800 text-white rounded-2xl rounded-tr-none shadow-md' 
+                    : 'bg-white border border-slate-200 text-slate-700 rounded-2xl rounded-tl-none shadow-sm'
+                } px-5 py-3 max-w-[85%] text-sm leading-relaxed">
+                    ${text}
+                </div>
+            `;
+            
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function updateMicUI(active) {
+            if (active) {
+                micBtn.classList.add('mic-active', 'bg-primary');
+            } else {
+                micBtn.classList.remove('mic-active');
+            }
+        }
+
+        function updateStatus(text, dotColorClass, textColorClass) {
+            statusBadge.classList.remove('opacity-0', 'translate-y-2');
+            statusText.textContent = text;
+            statusText.className = `font-bold ${textColorClass}`;
+            statusDot.className = `w-2.5 h-2.5 rounded-full ${dotColorClass} animate-pulse`;
+            
+            if (text === "Ready") {
+                statusDot.classList.remove('animate-pulse');
+                setTimeout(() => {
+                    if (!isListening && !isSpeaking) {
+                        statusBadge.classList.add('opacity-0', 'translate-y-2');
+                    }
+                }, 3000);
+            }
+        }
+
+        function getLanguageName(code) {
+            switch(code) {
+                case 'hi-IN': return 'Hindi';
+                case 'kn-IN': return 'Kannada';
+                default: return 'English';
+            }
+        }
+
+        // --- Event Listeners ---
+
+        micBtn.addEventListener('click', () => {
+            if (isSpeaking) {
+                window.speechSynthesis.cancel();
+                isSpeaking = false;
+            }
+            
+            if (isListening) {
+                recognition.stop();
+                // Manually stopping sets isListening false in onend
+            } else {
+                // Prime hardware then start
+                primeAudioHardware().then(() => {
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.error("Start error", e);
+                        // Reset if already started
+                        recognition.stop();
+                    }
+                });
+            }
+        });
+
+        sendBtn.addEventListener('click', () => {
+            if (isListening) recognition.stop();
+            handleUserMessage(textInput.value);
+        });
+        
+        textInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                if (isListening) recognition.stop();
+                handleUserMessage(textInput.value);
+            }
+        });
+
+        languageSelect.addEventListener('change', (e) => {
+            currentLang = e.target.value;
+            if (recognition) {
+                recognition.lang = currentLang;
+                // If currently listening, restart to apply new lang
+                if (isListening) {
+                    recognition.stop();
+                    setTimeout(() => recognition.start(), 200);
+                }
+            }
+        });
+
+        // Initialize
+        initSpeechRecognition();
+
+        // Init voices
+        window.speechSynthesis.onvoiceschanged = () => {
+            console.log("Voices loaded/changed");
+        };
+
+    </script>
+</body>
+</html>

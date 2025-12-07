@@ -1,0 +1,7 @@
+{
+  "name": "Jugaad-AI Talking Assistant",
+  "description": "A voice-enabled AI assistant supporting English and Kannada with local math capabilities.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
